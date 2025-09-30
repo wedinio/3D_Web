@@ -41,10 +41,10 @@ function Model({ url, format, position = [0,0,0], scale = [1,1,1] }: { url: stri
           case 'gltf':
           case 'glb':
             const gltfLoader = new GLTFLoader();
-            const gltf = await new Promise<any>((resolve, reject) => {
+            const gltf = await new Promise<unknown>((resolve, reject) => {
               gltfLoader.load(url, resolve, undefined, reject);
             });
-            loadedModel = gltf.scene;
+            loadedModel = (gltf as any).scene;
             break;
 
           case 'fbx':
