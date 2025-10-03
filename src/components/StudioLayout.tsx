@@ -258,6 +258,9 @@ export default function StudioLayout() {
                 <div key={axis} className="flex items-center gap-3 py-2">
                   <div className="w-6 text-xs text-neutral-400">{axis}:</div>
                   <input type="range" min={-5} max={5} step={0.1} value={selected? selected.position[idx]: 0} onChange={(e)=> setSelectedPosition(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                  <div className="w-12 text-xs text-neutral-300 text-right">
+                    {selected ? selected.position[idx].toFixed(1) : '0.0'}
+                  </div>
                 </div>
               ))}
             </div>
@@ -268,6 +271,9 @@ export default function StudioLayout() {
                 <div key={axis} className="flex items-center gap-3 py-2">
                   <div className="w-6 text-xs text-neutral-400">{axis}:</div>
                   <input type="range" min={0.1} max={3} step={0.1} value={selected? selected.scale[idx]: 1} onChange={(e)=> setSelectedScale(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                  <div className="w-12 text-xs text-neutral-300 text-right">
+                    {selected ? selected.scale[idx].toFixed(1) : '1.0'}
+                  </div>
                 </div>
               ))}
             </div>
@@ -278,6 +284,9 @@ export default function StudioLayout() {
                 <div key={axis} className="flex items-center gap-3 py-2">
                   <div className="w-6 text-xs text-neutral-400">{axis}:</div>
                   <input type="range" min={-180} max={180} step={1} value={selected? selected.rotation[idx]: 0} onChange={(e)=> setSelectedRotation(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                  <div className="w-12 text-xs text-neutral-300 text-right">
+                    {selected ? selected.rotation[idx].toFixed(0) + '°' : '0°'}
+                  </div>
                 </div>
               ))}
             </div>
@@ -334,6 +343,35 @@ export default function StudioLayout() {
                     <div key={axis} className="flex items-center gap-3 py-2">
                       <div className="w-6 text-xs text-neutral-400">{axis}:</div>
                       <input type="range" min={-5} max={5} step={0.1} value={selected? selected.position[idx]: 0} onChange={(e)=> setSelectedPosition(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                      <div className="w-12 text-xs text-neutral-300 text-right">
+                        {selected ? selected.position[idx].toFixed(1) : '0.0'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase text-neutral-400 mb-2">Scale</div>
+                  {(['x','y','z'] as const).map((axis, idx) => (
+                    <div key={axis} className="flex items-center gap-3 py-2">
+                      <div className="w-6 text-xs text-neutral-400">{axis}:</div>
+                      <input type="range" min={0.1} max={3} step={0.1} value={selected? selected.scale[idx]: 1} onChange={(e)=> setSelectedScale(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                      <div className="w-12 text-xs text-neutral-300 text-right">
+                        {selected ? selected.scale[idx].toFixed(1) : '1.0'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase text-neutral-400 mb-2">Rotation</div>
+                  {(['x','y','z'] as const).map((axis, idx) => (
+                    <div key={axis} className="flex items-center gap-3 py-2">
+                      <div className="w-6 text-xs text-neutral-400">{axis}:</div>
+                      <input type="range" min={-180} max={180} step={1} value={selected? selected.rotation[idx]: 0} onChange={(e)=> setSelectedRotation(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                      <div className="w-12 text-xs text-neutral-300 text-right">
+                        {selected ? selected.rotation[idx].toFixed(0) + '°' : '0°'}
+                      </div>
                     </div>
                   ))}
                 </div>
