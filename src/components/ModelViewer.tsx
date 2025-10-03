@@ -3,6 +3,7 @@
 import React, { Suspense, useRef, useState, useCallback } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls, Environment, Grid, Html, useProgress, Text } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
 import { GLTFLoader } from 'three-stdlib';
 import { FBXLoader } from 'three-stdlib';
 import * as THREE from 'three';
@@ -44,7 +45,7 @@ function Model({ url, format, position = [0,0,0], scale = [1,1,1], rotation = [0
           case 'gltf':
           case 'glb':
             const gltfLoader = new GLTFLoader();
-            const gltf = await new Promise<any>((resolve, reject) => {
+            const gltf = await new Promise<{ scene: THREE.Group }>((resolve, reject) => {
               gltfLoader.load(url, resolve, undefined, reject);
             });
             loadedModel = gltf.scene;
@@ -161,7 +162,7 @@ interface ModelViewerProps {
 // Camera controller component
 function CameraController() {
   const { camera } = useThree();
-  const controlsRef = useRef<any>(null);
+  const controlsRef = useRef<OrbitControlsType>(null);
 
   React.useEffect(() => {
     const handleCameraViewChange = (event: CustomEvent) => {
