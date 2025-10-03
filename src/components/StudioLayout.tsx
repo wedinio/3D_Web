@@ -1,24 +1,90 @@
 'use client';
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import ModelViewer from './ModelViewer';
+import html2canvas from 'html2canvas';
 
 export default function StudioLayout() {
   const stageRef = useRef<HTMLDivElement>(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
-  const [models, setModels] = useState<{ id: string; name: string; url: string; format: 'gltf'|'glb'; position: [number,number,number]; scale: [number,number,number]; }[]>([]);
+  const [models, setModels] = useState<{ id: string; name: string; url: string; format: 'gltf'|'glb'; position: [number,number,number]; scale: [number,number,number]; rotation: [number,number,number]; }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const el = stageRef.current;
     if (!el) return;
-    const canvas = el.querySelector('canvas');
-    if (!canvas) return;
-    const link = document.createElement('a');
-    link.download = 'screen.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    
+    try {
+      // Use html2canvas to capture the entire stage area
+      const canvas = await html2canvas(el, {
+        backgroundColor: '#1a1a1a',
+        useCORS: true,
+        allowTaint: true,
+        scale: 1,
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: el.offsetWidth,
+        windowHeight: el.offsetHeight,
+        ignoreElements: (element) => {
+          // Ignore elements that might cause CSS parsing issues
+          return element.tagName === 'STYLE' || element.tagName === 'LINK';
+        },
+        onclone: (clonedDoc) => {
+          // Remove problematic CSS that might cause parsing errors
+          const styleSheets = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+          styleSheets.forEach(sheet => {
+            if (sheet.parentNode) {
+              sheet.parentNode.removeChild(sheet);
+            }
+          });
+          
+          // Add basic styles to maintain appearance
+          const basicStyle = clonedDoc.createElement('style');
+          basicStyle.textContent = `
+            * { 
+              color: #ffffff !important; 
+              background-color: #1a1a1a !important; 
+              border-color: #333333 !important;
+            }
+            .bg-gray-900 { background-color: #1a1a1a !important; }
+            .text-white { color: #ffffff !important; }
+            .text-neutral-300 { color: #d4d4d8 !important; }
+            .text-neutral-400 { color: #a3a3a3 !important; }
+            .bg-neutral-800 { background-color: #262626 !important; }
+            .border-white { border-color: #ffffff !important; }
+            .border-neutral-200 { border-color: #e5e5e5 !important; }
+          `;
+          clonedDoc.head.appendChild(basicStyle);
+        }
+      });
+      
+      // Convert to data URL
+      const dataURL = canvas.toDataURL('image/png');
+      
+      if (!dataURL || dataURL === 'data:,') {
+        alert('Failed to capture screen content.');
+        return;
+      }
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.download = `screen-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+      link.href = dataURL;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('Screenshot saved successfully');
+      
+    } catch (error) {
+      console.error('Save screen error:', error);
+      alert('Failed to save screen. Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   }, []);
 
   const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,7 +99,7 @@ export default function StudioLayout() {
     const id = (globalThis.crypto && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const name = file.name;
     const format: 'gltf'|'glb' = lower.endsWith('.glb') ? 'glb' : 'gltf';
-    const item = { id, name, url, format, position: [0,0,0] as [number,number,number], scale: [1,1,1] as [number,number,number] };
+    const item = { id, name, url, format, position: [0,0,0] as [number,number,number], scale: [1,1,1] as [number,number,number], rotation: [0,0,0] as [number,number,number] };
     setModels(prev => [...prev, item]);
     setSelectedId(id);
     e.currentTarget.value = '';
@@ -48,6 +114,17 @@ export default function StudioLayout() {
   const setSelectedScale = useCallback((axis: 0|1|2, value: number) => {
     setModels(prev => prev.map(m => m.id === selectedId ? { ...m, scale: (m.scale.map((v,i)=> i===axis? value: v) as [number,number,number]) } : m));
   }, [selectedId]);
+
+  const setSelectedRotation = useCallback((axis: 0|1|2, value: number) => {
+    setModels(prev => prev.map(m => m.id === selectedId ? { ...m, rotation: (m.rotation.map((v,i)=> i===axis? value: v) as [number,number,number]) } : m));
+  }, [selectedId]);
+
+  const handleCameraView = useCallback((view: string) => {
+    // This will be handled by the ModelViewer component
+    const event = new CustomEvent('camera-view-change', { detail: { view } });
+    window.dispatchEvent(event);
+  }, []);
+
 
   return (
     <div className="w-full h-screen bg-neutral-950 text-neutral-100 flex">
@@ -86,28 +163,30 @@ export default function StudioLayout() {
             </button>
 
             {/* Toolbar icons matching the reference */}
-            <button title="Grid" className="h-8 w-8 grid place-items-center rounded-full bg-neutral-800/70 border border-white/10">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-neutral-300">
-                <circle cx="6" cy="6" r="1"/><circle cx="12" cy="6" r="1"/><circle cx="18" cy="6" r="1"/>
-                <circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/>
-                <circle cx="6" cy="18" r="1"/><circle cx="12" cy="18" r="1"/><circle cx="18" cy="18" r="1"/>
-              </svg>
+
+            {/* Camera View Controls */}
+            <button title="Front View" onClick={() => handleCameraView('front')} className="h-8 px-2 grid place-items-center rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10">
+              <span className="text-xs font-medium text-neutral-300">Front</span>
             </button>
 
-            <button title="Cube" className="h-8 w-8 grid place-items-center rounded-full bg-neutral-800/70 border border-white/10">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-neutral-300">
-                <path d="M12 2l8 4-8 4-8-4 8-4z"/><path d="M4 6v8l8 4 8-4V6"/></svg>
+            <button title="Back View" onClick={() => handleCameraView('back')} className="h-8 px-2 grid place-items-center rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10">
+              <span className="text-xs font-medium text-neutral-300">Back</span>
             </button>
 
-            <button title="Wireframe" className="h-8 w-8 grid place-items-center rounded-full bg-neutral-800/70 border border-white/10">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-neutral-300">
-                <rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 4v16"/></svg>
+            <button title="Left View" onClick={() => handleCameraView('left')} className="h-8 px-2 grid place-items-center rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10">
+              <span className="text-xs font-medium text-neutral-300">Left</span>
             </button>
 
-            <button title="Camera" className="h-8 w-8 grid place-items-center rounded-full bg-neutral-800/70 border border-white/10">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-neutral-300">
-                <path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l2-2h4l2 2h3a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="14" r="3"/></svg>
+            <button title="Right View" onClick={() => handleCameraView('right')} className="h-8 px-2 grid place-items-center rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10">
+              <span className="text-xs font-medium text-neutral-300">Right</span>
+            </button>
+
+            <button title="Top View" onClick={() => handleCameraView('top')} className="h-8 px-2 grid place-items-center rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10">
+              <span className="text-xs font-medium text-neutral-300">Top</span>
+            </button>
+
+            <button title="Bottom View" onClick={() => handleCameraView('bottom')} className="h-8 px-2 grid place-items-center rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10">
+              <span className="text-xs font-medium text-neutral-300">Bottom</span>
             </button>
 
             <label title="Import (glTF/GLB)" className="ml-1 h-8 rounded-full bg-neutral-800/70 hover:bg-neutral-700 border border-white/10 px-2 sm:px-3 text-xs font-medium cursor-pointer relative overflow-hidden flex items-center gap-2">
@@ -132,8 +211,30 @@ export default function StudioLayout() {
 
         {/* stage */}
         <div className="relative z-0 flex-1 flex items-center justify-center pb-2 sm:pb-3 md:pb-4">
-          <div ref={stageRef} className="w-full h-full rounded-2xl overflow-hidden bg-neutral-900 border border-white/10 shadow-2xl">
-            <ModelViewer models={models.map(m => ({ id: m.id, url: m.url, format: m.format, position: m.position, scale: m.scale }))} />
+          <div 
+            ref={stageRef} 
+            className="w-full h-full rounded-2xl overflow-hidden bg-neutral-900 border border-white/10 shadow-2xl"
+          >
+            <ModelViewer models={models.map(m => ({ id: m.id, url: m.url, format: m.format, position: m.position, scale: m.scale, rotation: m.rotation }))} />
+          </div>
+          
+          {/* Position Display */}
+          <div className="absolute bottom-4 left-4 bg-neutral-800/80 border border-white/20 rounded-lg px-3 py-2 text-sm">
+            <div className="text-neutral-400 text-xs mb-1">Position</div>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                <span className="text-neutral-300">X: {selectedId ? models.find(m => m.id === selectedId)?.position[0].toFixed(2) || '0.00' : '0.00'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                <span className="text-neutral-300">Y: {selectedId ? models.find(m => m.id === selectedId)?.position[1].toFixed(2) || '0.00' : '0.00'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                <span className="text-neutral-300">Z: {selectedId ? models.find(m => m.id === selectedId)?.position[2].toFixed(2) || '0.00' : '0.00'}</span>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -167,6 +268,16 @@ export default function StudioLayout() {
                 <div key={axis} className="flex items-center gap-3 py-2">
                   <div className="w-6 text-xs text-neutral-400">{axis}:</div>
                   <input type="range" min={0.1} max={3} step={0.1} value={selected? selected.scale[idx]: 1} onChange={(e)=> setSelectedScale(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div className="text-xs uppercase text-neutral-400 mb-2">Rotation</div>
+              {(['x','y','z'] as const).map((axis, idx) => (
+                <div key={axis} className="flex items-center gap-3 py-2">
+                  <div className="w-6 text-xs text-neutral-400">{axis}:</div>
+                  <input type="range" min={-180} max={180} step={1} value={selected? selected.rotation[idx]: 0} onChange={(e)=> setSelectedRotation(idx as 0|1|2, parseFloat(e.target.value))} className="flex-1 accent-indigo-500" />
                 </div>
               ))}
             </div>
