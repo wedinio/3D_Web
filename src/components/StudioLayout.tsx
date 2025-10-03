@@ -215,7 +215,16 @@ export default function StudioLayout() {
             ref={stageRef} 
             className="w-full h-full rounded-2xl overflow-hidden bg-neutral-900 border border-white/10 shadow-2xl"
           >
-            <ModelViewer models={models.map(m => ({ id: m.id, url: m.url, format: m.format, position: m.position, scale: m.scale, rotation: m.rotation }))} />
+            <ModelViewer 
+              models={models.map(m => ({ id: m.id, url: m.url, format: m.format, position: m.position, scale: m.scale, rotation: m.rotation }))} 
+              selectedId={selectedId}
+              onModelSelect={setSelectedId}
+              onModelTransform={(id, position) => {
+                setModels(prev => prev.map(m => 
+                  m.id === id ? { ...m, position } : m
+                ));
+              }}
+            />
           </div>
           
           {/* Position Display */}

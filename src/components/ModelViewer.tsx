@@ -2,7 +2,7 @@
 
 import React, { Suspense, useRef, useState, useCallback } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
-import { OrbitControls, Environment, Grid, Html, useProgress, Text } from '@react-three/drei';
+import { OrbitControls, Environment, Grid, Html, useProgress, Text, TransformControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
 import { GLTFLoader } from 'three-stdlib';
 import { FBXLoader } from 'three-stdlib';
@@ -22,12 +22,29 @@ function Loader() {
 }
 
 // Model component that handles different formats
-function Model({ url, format, position = [0,0,0], scale = [1,1,1], rotation = [0,0,0] }: { url: string; format: string; position?: [number, number, number]; scale?: [number, number, number]; rotation?: [number, number, number] }) {
+function Model({ url, format, position = [0,0,0], scale = [1,1,1], rotation = [0,0,0], isSelected = false, onSelect }: { 
+  url: string; 
+  format: string; 
+  position?: [number, number, number]; 
+  scale?: [number, number, number]; 
+  rotation?: [number, number, number];
+  isSelected?: boolean;
+  onSelect?: () => void;
+}) {
   const meshRef = useRef<THREE.Group>(null);
   const [model, setModel] = useState<THREE.Object3D | null>(null);
   const [originalBottomY, setOriginalBottomY] = useState(0);
   const [originalLeftX, setOriginalLeftX] = useState(0);
   const [originalFrontZ, setOriginalFrontZ] = useState(0);
+  const [modelCenter, setModelCenter] = useState<THREE.Vector3>(new THREE.Vector3());
+  const [modelSize, setModelSize] = useState<number>(1);
+
+  const handleClick = useCallback((event: any) => {
+    event.stopPropagation();
+    if (onSelect) {
+      onSelect();
+    }
+  }, [onSelect]);
 
   useFrame((state, delta) => {
     if (meshRef.current) {
@@ -112,6 +129,14 @@ function Model({ url, format, position = [0,0,0], scale = [1,1,1], rotation = [0
         setOriginalBottomY(-scaledBox.min.y);
         setOriginalLeftX(-scaledBox.min.x);
         setOriginalFrontZ(-scaledBox.min.z);
+        
+        // Calculate model center and size for gumball positioning
+        const center = scaledBox.getCenter(new THREE.Vector3());
+        const modelDimensions = scaledBox.getSize(new THREE.Vector3());
+        const maxSize = Math.max(modelDimensions.x, modelDimensions.y, modelDimensions.z);
+        
+        setModelCenter(center);
+        setModelSize(maxSize);
         setModel(loadedModel);
       } catch (error) {
         console.error('Error loading model:', error);
@@ -134,14 +159,47 @@ function Model({ url, format, position = [0,0,0], scale = [1,1,1], rotation = [0
   ] as [number, number, number];
 
   return (
-    <group 
-      ref={meshRef} 
-      position={adjustedPosition as unknown as THREE.Vector3} 
-      scale={scale as unknown as THREE.Vector3}
-      rotation={rotation.map(r => r * Math.PI / 180) as unknown as THREE.Euler}
-    >
-      <primitive object={model} />
-    </group>
+    <>
+      <group 
+        ref={meshRef} 
+        position={adjustedPosition as unknown as THREE.Vector3} 
+        scale={scale as unknown as THREE.Vector3}
+        rotation={rotation.map(r => r * Math.PI / 180) as unknown as THREE.Euler}
+        onClick={handleClick}
+      >
+        <primitive object={model} />
+      </group>
+      {isSelected && meshRef.current && model && (
+        <TransformControls
+          mode="translate"
+          size={modelSize * 0.5}
+          showX={true}
+          showY={true}
+          showZ={true}
+          object={meshRef.current}
+          position={[
+            modelCenter.x * scale[0],
+            modelCenter.y * scale[1], 
+            modelCenter.z * scale[2]
+          ]}
+          onObjectChange={(e) => {
+            if (e && meshRef.current) {
+              // Get the current position from the group
+              const currentPos = meshRef.current.position;
+              const newPosition = [currentPos.x, currentPos.y, currentPos.z] as [number, number, number];
+              console.log('TransformControls position change:', newPosition);
+              
+              // Dispatch custom event to update the model position
+              window.dispatchEvent(new CustomEvent('model-transform', {
+                detail: { 
+                  position: newPosition
+                }
+              }));
+            }
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -157,6 +215,9 @@ interface PlacedModel {
 
 interface ModelViewerProps {
   models?: PlacedModel[];
+  selectedId?: string | null;
+  onModelSelect?: (id: string) => void;
+  onModelTransform?: (id: string, position: [number, number, number]) => void;
 }
 
 // Camera controller component
@@ -218,12 +279,34 @@ function CameraController() {
       enableRotate={true}
       minDistance={1}
       maxDistance={50}
+      mouseButtons={{
+        LEFT: undefined, // Disable left mouse button
+        MIDDLE: THREE.MOUSE.DOLLY, // Middle mouse for zoom
+        RIGHT: THREE.MOUSE.ROTATE // Right mouse for rotate
+      }}
+      touches={{
+        ONE: THREE.TOUCH.ROTATE,
+        TWO: THREE.TOUCH.DOLLY_PAN
+      }}
     />
   );
 }
 
 
-export default function ModelViewer({ models = [] }: ModelViewerProps) {
+export default function ModelViewer({ models = [], selectedId, onModelSelect, onModelTransform }: ModelViewerProps) {
+  
+  React.useEffect(() => {
+    const handleModelTransform = (event: CustomEvent) => {
+      if (selectedId && onModelTransform) {
+        onModelTransform(selectedId, event.detail.position);
+      }
+    };
+
+    window.addEventListener('model-transform', handleModelTransform as EventListener);
+    return () => {
+      window.removeEventListener('model-transform', handleModelTransform as EventListener);
+    };
+  }, [selectedId, onModelTransform]);
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -268,7 +351,16 @@ export default function ModelViewer({ models = [] }: ModelViewerProps) {
 
             {/* Models */}
             {models.map((m) => (
-              <Model key={m.id} url={m.url} format={m.format} position={m.position} scale={m.scale} rotation={m.rotation} />
+              <Model 
+                key={m.id} 
+                url={m.url} 
+                format={m.format} 
+                position={m.position} 
+                scale={m.scale} 
+                rotation={m.rotation}
+                isSelected={selectedId === m.id}
+                onSelect={() => onModelSelect?.(m.id)}
+              />
             ))}
 
             {/* Camera Controller */}
